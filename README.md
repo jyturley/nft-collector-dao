@@ -1,48 +1,14 @@
-# DAO Project
+# CollectorDAO
 
-In this project you're going to write a governance smart contract for a decentralized autonomous organization (DAO) aimed at buying valuable NFTs. In doing so, you will:
+A governance smart contract for a decentralized autonomous organization (DAO) aimed at buying NFTs. The contract implements the following:
 
-- Implement a treasury contract that buys NFTs
-- Implement a voting system with signature votes
-- Implement a proposal system that calls arbitrary functions.
+1. Voting system with signature votes through usage of type structured data hashing ([EIP-712](https://eips.ethereum.org/EIPS/eip-712))
+1. Proposal system, able to call arbitrary functions.
+1. Automated purchases NFTs at a particular price.
 
-```
-You are writing a contract for Collector DAO, a DAO that aims to collect rare NFTs.
-This DAO wishes to have a contract that:
+[Audited by 0xMacro staff](./staff-audit-dao.md).
 
-- Allows anyone to buy a membership for 1 ETH
-- Allows a member to propose an NFT to buy
-- Allows members to vote on proposals:
-    - With a 25% quorum
-- If passed, have the contract purchase the NFT in a reasonably automated fashion.
-```
-
-### Implementation Requirements
-
-- Even though this DAO has one main purpose, write your proposal system to support calling arbitrary functions, then use this to implement the NFT-buying behavior.
-- Write a function that allows any address to tally a vote cast by a DAO member using offchain-generated signatures. Then, write a function to do this in bulk.
-
-Here is the interface you can assume exists for buying NFTs:
-
-```solidity
-interface NftMarketplace {
-  function getPrice(address nftContract, uint256 nftId)
-    external
-    returns (uint256 price);
-
-  function buy(address nftContract, uint256 nftId)
-    external
-    payable
-    returns (bool success);
-}
-
-```
-
-NOTE: Assume that NftMarketplace.buy will transfer the NFT to the caller using ERC721.safeTransferFrom, so you will need to ensure your DAO contract can correctly accept safe transfers
-
-DO NOT use third party libraries for this project. You are free to reference other governance contract implementations, but you must write your own from scratch.
-
-## Project Notes
+## Notes
 
 - `dao.test.ts` file is used for testing. Runtime of the test is very much proportional to the `VOTING_PERIOD` constant value in `CollectorDAO.sol`. I have this set to a low value of 50 blocks. However, for production, a much higher value of 3 days would be appropriate. This is commented out right above the declaration. I've left it at 50 so auditors can run the tests easily. See [Running Tests section](#running-tests) for reasoning.
 - Intentional Design Choices
@@ -69,14 +35,3 @@ DO NOT use third party libraries for this project. You are free to reference oth
 - Due to the `CollectorDAO` contract using block numbers as a form of time, the typescript tests make heavy use of `await network.provider.send("evm_mine")` calls to fastforward time. If I need to move forward N blocks, I am calling **evm_mine** N times. At the moment, I am unaware of a more efficient way to change the block number in testing.
 
 - For production, `VOTING_PERIOD` should be set to a high number (3 days), which I believe would be a more realistic time frame for DAO members to vote. Unfortunately, a 3day value would make the tests run much more slowly.
-
-## Other Deliverables
-
-### Design Exercise
-
-1. Per project specs there is no vote delegation; it's not possible for Alice to delegate her voting power to Bob, so that when Bob votes he does so with the voting power of both himself and Alice in a single transaction. This means for someone's vote to count, that person must sign and broadcast their own transaction every time. How would you design your contract to allow for non-transitive vote delegation?
-
-   - Non-transitive vote delegation can be be done through maintaining a new `mapping(address => address)` in contract storage. This can represent all the one-way delegations that are occurring in the DAO. Enabling delegations can open a whole new set of complications, however. For instance, how can we enforce a mechanism that prevents members from voting on a proposal, then delegating votes to another person so they themselves can vote on the same proposal. In such a scheme, a single vote can be counted multiple times. To address this, we can implement a form of snapshotting in which we save important events as they happen. Hence, in addition to the mapping, we can keep another `mapping(address => Snapshot)` object where the snapshot object contains a `uint votingPower` and `uint blockNumber` representing how much vote power the address had in at a certain time.
-
-2. What are some problems with implementing transitive vote delegation on-chain? (Transitive means: If A delegates to B, and B delegates to C, then C gains voting power from both A and B, while B has no voting power).
-   - On-chain transitive delegation further complicates this. This form of delegation extends a significant amount of trust and power to the delegatee. Account A has no say if account B decides to transfer his/her shares to C. This type of mechanism can inherently lead to centralization of votes which can be very much the opposite of the ethos of decentralized autonomous organizations. Implementing transitiving voting on-chain would require the contract, at every delegation from A->B, to lookup all other accounts that have previously delegated voters to A, and then modifing those values to point to C. This could require an enumeration of all addresses that have ever delgated in the DAO. Snapshotting would again be required to ensure correct vote-keeping is intact.
